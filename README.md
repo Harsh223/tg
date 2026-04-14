@@ -4,9 +4,9 @@ Beatscope is a desktop application for timing and analyzing mechanical watches f
 
 ## Repository
 
-- Source code: `https://github.com/Harsh223/beatscope`
-- Latest release: `https://github.com/Harsh223/beatscope/releases/latest`
-- All releases: `https://github.com/Harsh223/beatscope/releases`
+- Source code: [https://github.com/Harsh223/beatscope](https://github.com/Harsh223/beatscope)
+- Latest release: [https://github.com/Harsh223/beatscope/releases/latest](https://github.com/Harsh223/beatscope/releases/latest)
+- All releases: [https://github.com/Harsh223/beatscope/releases](https://github.com/Harsh223/beatscope/releases)
 
 If you cloned before the rename from `tg`, update your remote:
 
@@ -169,13 +169,13 @@ Beatscope is a standalone continuation derived from a fork of the original **tg*
 
 - Project: `tg`
 - Original author: **Marcello Mamino**
-- Upstream repository: `https://github.com/vacaboja/tg`
+- Upstream repository: [https://github.com/vacaboja/tg](https://github.com/vacaboja/tg)
 - License: GNU GPL v2
 
 ### Beatscope continuation
 
 - Maintainer: **Harsh223**
-- Repository: `https://github.com/Harsh223/beatscope`
+- Repository: [https://github.com/Harsh223/beatscope](https://github.com/Harsh223/beatscope)
 
 This project preserves attribution to original authors and contributors while continuing active development under the Beatscope name.
 
