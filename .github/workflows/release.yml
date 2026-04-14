@@ -2,23 +2,13 @@ name: Release
 
 on:
   push:
-    branches:
-      - master
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
-      channel:
-        description: "Release channel"
-        required: true
-        default: "nightly"
-        type: choice
-        options:
-          - nightly
-          - stable
       tag:
-        description: "Stable tag (required when channel=stable, example: v0.6.0)"
-        required: false
+        description: "Tag to release (required, example: v0.6.0)"
+        required: true
         type: string
 
 permissions:
@@ -38,59 +28,44 @@ jobs:
       release_name: ${{ steps.meta.outputs.release_name }}
       target_commitish: ${{ steps.meta.outputs.target_commitish }}
     steps:
-      - name: Resolve tag/version/channel
+      - name: Resolve tag/version
         id: meta
         shell: bash
         run: |
           EVENT="${{ github.event_name }}"
-          REF_TYPE="${{ github.ref_type }}"
           REF_NAME="${{ github.ref_name }}"
-          SHA="${{ github.sha }}"
-          SHORT_SHA="$(printf '%s' "${SHA}" | cut -c1-7)"
+          INPUT_TAG="${{ github.event.inputs.tag }}"
 
           if [ "${EVENT}" = "workflow_dispatch" ]; then
-            CHANNEL="${{ github.event.inputs.channel }}"
-            INPUT_TAG="${{ github.event.inputs.tag }}"
-
-            if [ "${CHANNEL}" = "stable" ]; then
-              if [ -z "${INPUT_TAG}" ]; then
-                echo "Input 'tag' is required when channel=stable" >&2
-                exit 1
-              fi
-              if [[ "${INPUT_TAG}" != v* ]]; then
-                echo "Stable tag must start with 'v' (got: ${INPUT_TAG})" >&2
-                exit 1
-              fi
-
-              TAG="${INPUT_TAG}"
-              VERSION="${TAG#v}"
-              PRERELEASE=false
-              RELEASE_NAME="Beatscope ${TAG}"
-            else
-              DATE_UTC="$(date -u +'%Y%m%d')"
-              TAG="nightly-${DATE_UTC}-${SHORT_SHA}-r${GITHUB_RUN_NUMBER}"
-              VERSION="${TAG}"
-              PRERELEASE=true
-              RELEASE_NAME="Beatscope Nightly ${DATE_UTC} (${SHORT_SHA})"
-            fi
-          elif [ "${REF_TYPE}" = "tag" ] && [[ "${REF_NAME}" == v* ]]; then
-            TAG="${REF_NAME}"
-            VERSION="${TAG#v}"
-            PRERELEASE=false
-            RELEASE_NAME="Beatscope ${TAG}"
+            TAG="${INPUT_TAG}"
           else
-            DATE_UTC="$(date -u +'%Y%m%d')"
-            TAG="nightly-${DATE_UTC}-${SHORT_SHA}-r${GITHUB_RUN_NUMBER}"
-            VERSION="${TAG}"
-            PRERELEASE=true
-            RELEASE_NAME="Beatscope Nightly ${DATE_UTC} (${SHORT_SHA})"
+            TAG="${REF_NAME}"
           fi
+
+          if [ -z "${TAG}" ]; then
+            echo "Tag cannot be empty" >&2
+            exit 1
+          fi
+
+          if [[ "${TAG}" != v* ]]; then
+            echo "Tag must start with 'v' (got: ${TAG})" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PRERELEASE=false
+          if [[ "${TAG}" == *-* ]]; then
+            PRERELEASE=true
+          fi
+
+          RELEASE_NAME="Beatscope ${TAG}"
+          TARGET_COMMITISH="${TAG}"
 
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
           echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
           echo "prerelease=${PRERELEASE}" >> "${GITHUB_OUTPUT}"
           echo "release_name=${RELEASE_NAME}" >> "${GITHUB_OUTPUT}"
-          echo "target_commitish=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "target_commitish=${TARGET_COMMITISH}" >> "${GITHUB_OUTPUT}"
 
   build-source:
     name: Build source archive
@@ -101,6 +76,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.target_commitish }}
 
       - name: Create source tarball
         shell: bash
