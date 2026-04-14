@@ -168,7 +168,7 @@ jobs:
 
   build-macos:
     name: Build macOS x86_64
-    runs-on: macos-13
+    runs-on: macos-latest
     needs: prepare
     steps:
       - name: Checkout
