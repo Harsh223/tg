@@ -277,6 +277,7 @@ jobs:
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-22.04
+    if: ${{ always() && needs.prepare.result == 'success' && needs.build-source.result == 'success' && needs.build-linux.result == 'success' && needs.build-windows.result == 'success' }}
     needs:
       - prepare
       - build-source
