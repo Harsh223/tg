@@ -1,0 +1,318 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Release channel"
+        required: true
+        default: "nightly"
+        type: choice
+        options:
+          - nightly
+          - stable
+      tag:
+        description: "Stable tag (required when channel=stable, example: v0.6.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PROJECT_NAME: beatscope
+
+jobs:
+  prepare:
+    name: Prepare release metadata
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      release_name: ${{ steps.meta.outputs.release_name }}
+      target_commitish: ${{ steps.meta.outputs.target_commitish }}
+    steps:
+      - name: Resolve tag/version/channel
+        id: meta
+        shell: bash
+        run: |
+          EVENT="${{ github.event_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+          REF_NAME="${{ github.ref_name }}"
+          SHA="${{ github.sha }}"
+          SHORT_SHA="$(printf '%s' "${SHA}" | cut -c1-7)"
+
+          if [ "${EVENT}" = "workflow_dispatch" ]; then
+            CHANNEL="${{ github.event.inputs.channel }}"
+            INPUT_TAG="${{ github.event.inputs.tag }}"
+
+            if [ "${CHANNEL}" = "stable" ]; then
+              if [ -z "${INPUT_TAG}" ]; then
+                echo "Input 'tag' is required when channel=stable" >&2
+                exit 1
+              fi
+              if [[ "${INPUT_TAG}" != v* ]]; then
+                echo "Stable tag must start with 'v' (got: ${INPUT_TAG})" >&2
+                exit 1
+              fi
+
+              TAG="${INPUT_TAG}"
+              VERSION="${TAG#v}"
+              PRERELEASE=false
+              RELEASE_NAME="Beatscope ${TAG}"
+            else
+              DATE_UTC="$(date -u +'%Y%m%d')"
+              TAG="nightly-${DATE_UTC}-${SHORT_SHA}-r${GITHUB_RUN_NUMBER}"
+              VERSION="${TAG}"
+              PRERELEASE=true
+              RELEASE_NAME="Beatscope Nightly ${DATE_UTC} (${SHORT_SHA})"
+            fi
+          elif [ "${REF_TYPE}" = "tag" ] && [[ "${REF_NAME}" == v* ]]; then
+            TAG="${REF_NAME}"
+            VERSION="${TAG#v}"
+            PRERELEASE=false
+            RELEASE_NAME="Beatscope ${TAG}"
+          else
+            DATE_UTC="$(date -u +'%Y%m%d')"
+            TAG="nightly-${DATE_UTC}-${SHORT_SHA}-r${GITHUB_RUN_NUMBER}"
+            VERSION="${TAG}"
+            PRERELEASE=true
+            RELEASE_NAME="Beatscope Nightly ${DATE_UTC} (${SHORT_SHA})"
+          fi
+
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "prerelease=${PRERELEASE}" >> "${GITHUB_OUTPUT}"
+          echo "release_name=${RELEASE_NAME}" >> "${GITHUB_OUTPUT}"
+          echo "target_commitish=${SHA}" >> "${GITHUB_OUTPUT}"
+
+  build-source:
+    name: Build source archive
+    runs-on: ubuntu-22.04
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create source tarball
+        shell: bash
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          git archive \
+            --format=tar.gz \
+            --prefix="${PROJECT_NAME}-${TAG}/" \
+            -o "${PROJECT_NAME}-${TAG}-source.tar.gz" \
+            "${{ needs.prepare.outputs.target_commitish }}"
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source
+          path: "${{ env.PROJECT_NAME }}-${{ needs.prepare.outputs.tag }}-source.tar.gz"
+
+  build-linux:
+    name: Build Linux x86_64
+    runs-on: ubuntu-22.04
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.target_commitish }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            autoconf \
+            automake \
+            libtool \
+            pkg-config \
+            libgtk-3-dev \
+            portaudio19-dev \
+            libfftw3-dev \
+            zip
+
+      - name: Build
+        shell: bash
+        run: |
+          ./autogen.sh
+          ./configure
+          make -j"$(nproc)"
+
+      - name: Package Linux assets
+        shell: bash
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          OUTDIR="release/linux"
+          mkdir -p "${OUTDIR}"
+          install -m 0755 beatscope "${OUTDIR}/beatscope"
+          cp LICENSE README.md "${OUTDIR}/"
+          tar -czf "${PROJECT_NAME}-${TAG}-linux-x86_64.tar.gz" -C "${OUTDIR}" beatscope LICENSE README.md
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: "${{ env.PROJECT_NAME }}-${{ needs.prepare.outputs.tag }}-linux-x86_64.tar.gz"
+
+  build-macos:
+    name: Build macOS x86_64
+    runs-on: macos-13
+    needs: prepare
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.target_commitish }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          brew update
+          brew install autoconf automake libtool pkg-config gtk+3 portaudio fftw
+
+      - name: Build
+        shell: bash
+        run: |
+          ./autogen.sh
+          ./configure
+          make -j"$(sysctl -n hw.ncpu)"
+
+      - name: Package macOS assets
+        shell: bash
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          OUTDIR="release/macos"
+          mkdir -p "${OUTDIR}"
+          install -m 0755 beatscope "${OUTDIR}/beatscope"
+          cp LICENSE README.md "${OUTDIR}/"
+          tar -czf "${PROJECT_NAME}-${TAG}-macos-x86_64.tar.gz" -C "${OUTDIR}" beatscope LICENSE README.md
+          (
+            cd "${OUTDIR}"
+            zip -r "../../${PROJECT_NAME}-${TAG}-macos-x86_64.zip" beatscope LICENSE README.md
+          )
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            ${{ env.PROJECT_NAME }}-${{ needs.prepare.outputs.tag }}-macos-x86_64.tar.gz
+            ${{ env.PROJECT_NAME }}-${{ needs.prepare.outputs.tag }}-macos-x86_64.zip
+
+  build-windows:
+    name: Build Windows x86_64
+    runs-on: windows-latest
+    needs: prepare
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.target_commitish }}
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            autoconf
+            automake
+            libtool
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-portaudio
+            mingw-w64-x86_64-fftw
+            zip
+
+      - name: Build
+        run: |
+          ./autogen.sh
+          ./configure
+          make -j"$(nproc)"
+
+      - name: Package Windows assets
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          OUTDIR="release/windows"
+          mkdir -p "${OUTDIR}"
+
+          if [ -f beatscope.exe ]; then
+            install -m 0755 beatscope.exe "${OUTDIR}/beatscope.exe"
+          elif [ -f beatscope ]; then
+            cp beatscope "${OUTDIR}/beatscope.exe"
+          else
+            echo "Unable to find built executable" >&2
+            exit 1
+          fi
+
+          cp LICENSE README.md "${OUTDIR}/"
+          (
+            cd "${OUTDIR}"
+            zip -r "../../${PROJECT_NAME}-${TAG}-windows-x86_64.zip" beatscope.exe LICENSE README.md
+          )
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: "${{ env.PROJECT_NAME }}-${{ needs.prepare.outputs.tag }}-windows-x86_64.zip"
+
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-22.04
+    needs:
+      - prepare
+      - build-source
+      - build-linux
+      - build-macos
+      - build-windows
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Flatten release files
+        shell: bash
+        run: |
+          mkdir -p release-files
+          find dist -maxdepth 3 -type f -print -exec cp {} release-files/ \;
+          ls -lah release-files
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          (
+            cd release-files
+            sha256sum * > "${PROJECT_NAME}-${TAG}-sha256.txt"
+          )
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ needs.prepare.outputs.target_commitish }}
+          name: ${{ needs.prepare.outputs.release_name }}
+          generate_release_notes: true
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
+          files: |
+            release-files/*
+          fail_on_unmatched_files: true
