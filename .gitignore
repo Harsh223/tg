@@ -2,6 +2,9 @@
 !.gitignore
 !.travis.yml
 !.valgrind.supp
+!.github/
+!.github/workflows/
+!.github/workflows/release.yml
 
 # Object files
 *.o
