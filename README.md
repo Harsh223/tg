@@ -1,42 +1,34 @@
 # Beatscope — Open-Source Mechanical Watch Timegrapher
 
-Beatscope is a desktop application for timing and analyzing mechanical watches from live audio input (microphone or contact pickup). It is designed for watchmakers and enthusiasts who need practical rate, beat error, amplitude, and position-comparison tools in one place.
+Beatscope is a desktop application for timing and analyzing mechanical watches from live audio input (microphone or contact pickup). It provides practical tools for measuring rate, beat error, amplitude, and position comparisons in one workflow.
 
-## Repository status
+## Repository
 
-- Current repository: `https://github.com/Harsh223/tg`
-- Planned rename: `https://github.com/Harsh223/beatscope`
+- Source code: `https://github.com/Harsh223/beatscope`
+- Latest release: `https://github.com/Harsh223/beatscope/releases/latest`
+- All releases: `https://github.com/Harsh223/beatscope/releases`
 
-If you cloned before the rename, update your remote with:
+If you cloned before the rename from `tg`, update your remote:
 
     git remote set-url origin https://github.com/Harsh223/beatscope.git
 
-## Releases (fully automated)
+## Releases
 
-This project uses a tag-based GitHub Actions release pipeline with **no manual asset uploads**.
+Releases are built automatically from version tags (`v*`) using GitHub Actions.
 
-When a version tag like `v0.6.0` is pushed, CI automatically builds and publishes all release assets to GitHub Releases.
+When a tag such as `v0.1.1` is published, Beatscope generates release assets for supported platforms and uploads them to the GitHub release page.
 
-### Automatically generated assets
-
-For each release tag `vX.Y.Z`, the workflow publishes:
+Typical assets include:
 
 - `beatscope-vX.Y.Z-source.tar.gz`
 - `beatscope-vX.Y.Z-linux-x86_64.tar.gz`
-- `beatscope-vX.Y.Z-macos-x86_64.tar.gz`
-- `beatscope-vX.Y.Z-macos-x86_64.zip`
 - `beatscope-vX.Y.Z-windows-x86_64.zip`
+- `beatscope-vX.Y.Z-macos-x86_64.tar.gz` / `beatscope-vX.Y.Z-macos-x86_64.zip` (when macOS runner is available)
 - `beatscope-vX.Y.Z-sha256.txt`
-
-Release pages:
-
-- Current: `https://github.com/Harsh223/tg/releases/latest`
-- After rename: `https://github.com/Harsh223/beatscope/releases/latest`
-
 
 ## Install
 
-Download assets from GitHub Releases and choose the package for your platform.
+Download the package for your OS from the latest release page.
 
 ### Windows
 
@@ -46,23 +38,23 @@ Use:
 
 Install:
 
-1. Download the zip.
-2. Extract it.
-3. Run `beatscope.exe`.
+1. Download and extract the zip.
+2. Run `beatscope.exe`.
 
 ### macOS
 
-Use one of:
+Use (if present in that release):
 
-- `beatscope-vX.Y.Z-macos-x86_64.zip`
-- `beatscope-vX.Y.Z-macos-x86_64.tar.gz`
+- `beatscope-vX.Y.Z-macos-x86_64.zip` or `.tar.gz`
 
 Install:
 
-1. Download the archive.
-2. Extract it.
-3. Move `beatscope` to your preferred location (for example `Applications`).
-4. If blocked on first run, right-click -> **Open**.
+1. Download and extract.
+2. Run `beatscope`.
+
+Gatekeeper note for unsigned builds:
+- If macOS blocks first launch, right-click the binary and select **Open**.
+- Then confirm in **System Settings → Privacy & Security** if prompted.
 
 ### Linux
 
@@ -73,7 +65,7 @@ Use:
 Install:
 
 1. Download and extract.
-2. Make executable if needed:
+2. Make executable if required:
 
        chmod +x beatscope
 
@@ -91,9 +83,9 @@ Example:
 
     sha256sum -c beatscope-vX.Y.Z-sha256.txt
 
-## Key features
+## Key Features
 
-- Real-time rate / beat error / amplitude analysis
+- Real-time rate, beat error, and amplitude analysis
 - Movement presets (quick BPH + lift-angle setup)
 - Position-tagged snapshots (`DU`, `DD`, `CU`, `CD`, `CL`, `CR`)
 - Position Summary panel with:
@@ -103,18 +95,18 @@ Example:
   - `ΔH-V`
   - pair deltas (`DU-DD`, `CU-CD`)
 - Guided mode and focus mode
-- Save/load sessions (`.tgj`), with backward compatibility for tg session data
+- Save/load sessions (`.tgj`), with backward compatibility for original `tg` session data
 
-## Quick workflow
+## Quick Workflow
 
 1. Start `beatscope`.
 2. Select a movement preset or manually set BPH/lift angle.
-3. Wait for a stable signal state.
-4. Capture snapshots in multiple positions.
+3. Wait for stable signal detection.
+4. Capture snapshots across positions.
 5. Review Position Summary for regulation deltas.
-6. Save session files for records and comparison.
+6. Save the session for later comparison.
 
-## Build from source
+## Build From Source
 
 ### Dependencies
 
@@ -124,17 +116,7 @@ Example:
 - Autotools (`autoconf`, `automake`, `libtool`, `pkg-config`)
 - C compiler (`gcc` or `clang`)
 
-### Build commands
-
-Current repository path:
-
-    git clone https://github.com/Harsh223/tg.git
-    cd tg
-    ./autogen.sh
-    ./configure
-    make
-
-After rename:
+### Build
 
     git clone https://github.com/Harsh223/beatscope.git
     cd beatscope
@@ -150,13 +132,13 @@ Debug build:
 
     make beatscope-dbg
 
-## Platform notes
+## Platform Notes
 
 ### Debian / Ubuntu
 
     sudo apt-get install libgtk-3-dev portaudio19-dev libfftw3-dev git autoconf automake libtool pkg-config
-    git clone https://github.com/Harsh223/tg.git
-    cd tg
+    git clone https://github.com/Harsh223/beatscope.git
+    cd beatscope
     ./autogen.sh
     ./configure
     make
@@ -164,8 +146,8 @@ Debug build:
 ### Fedora
 
     sudo dnf install fftw-devel portaudio-devel gtk3-devel autoconf automake libtool pkg-config git
-    git clone https://github.com/Harsh223/tg.git
-    cd tg
+    git clone https://github.com/Harsh223/beatscope.git
+    cd beatscope
     ./autogen.sh
     ./configure
     make
@@ -173,13 +155,13 @@ Debug build:
 ### Windows (MSYS2)
 
     pacman -S mingw-w64-x86_64-gcc make pkg-config mingw-w64-x86_64-gtk3 mingw-w64-x86_64-portaudio mingw-w64-x86_64-fftw git autoconf automake libtool
-    git clone https://github.com/Harsh223/tg.git
-    cd tg
+    git clone https://github.com/Harsh223/beatscope.git
+    cd beatscope
     ./autogen.sh
     ./configure
     make
 
-## Upstream lineage and credits
+## Upstream Lineage and Credits
 
 Beatscope is a standalone continuation derived from a fork of the original **tg** project.
 
@@ -187,19 +169,18 @@ Beatscope is a standalone continuation derived from a fork of the original **tg*
 
 - Project: `tg`
 - Original author: **Marcello Mamino**
-- Original upstream repository: `https://github.com/vacaboja/tg`
+- Upstream repository: `https://github.com/vacaboja/tg`
 - License: GNU GPL v2
 
 ### Beatscope continuation
 
 - Maintainer: **Harsh223**
-- Current repository: `https://github.com/Harsh223/tg`
-- Planned renamed repository: `https://github.com/Harsh223/beatscope`
+- Repository: `https://github.com/Harsh223/beatscope`
 
 This project preserves attribution to original authors and contributors while continuing active development under the Beatscope name.
 
 ## License
 
-Beatscope (including inherited tg code) is distributed under **GNU GPL v2**.
+Beatscope (including inherited `tg` code) is distributed under **GNU GPL v2**.
 
-See `LICENSE` for full terms and contributor notices.
+See `LICENSE` for full terms.
