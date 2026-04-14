@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-beatscope-data">
+    <comment>Beatscope watch timing data</comment>
+    <magic>
+      <match type="string" offset="0" value="Lbeatscope-version;"/>
+      <match type="string" offset="0" value="Ltg-timer-version;"/>
+    </magic>
+    <glob pattern="*.beatscope"/>
+    <glob pattern="*.tgj"/>
+  </mime-type>
+</mime-info>

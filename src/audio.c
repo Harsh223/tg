@@ -24,6 +24,8 @@ float pa_buffers[PA_BUFF_SIZE];
 int write_pointer = 0;
 uint64_t timestamp = 0;
 pthread_mutex_t audio_mutex;
+static int audio_mutex_ready = 0;
+static PaStream *pa_stream = NULL;
 
 /* Data for PA callback to use */
 static struct callback_info {
@@ -44,10 +46,20 @@ static int paudio_callback(const void *input_buffer,
 	const float *input_samples = (const float*)input_buffer;
 	unsigned long i;
 	const struct callback_info *info = data;
+	static bool even = true;
+
+	if(!input_samples)
+		return paContinue;
+
+	int have_lock = 0;
+	if(audio_mutex_ready) {
+		pthread_mutex_lock(&audio_mutex);
+		have_lock = 1;
+	}
+
 	unsigned wp = write_pointer;
 
 	if (info->light) {
-		static bool even = true;
 		/* Copy every other sample.  It would be much more efficient to
 		 * just drop the sample rate if the sound hardware supports it.
 		 * This would also avoid the aliasing effects that this simple
@@ -81,25 +93,28 @@ static int paudio_callback(const void *input_buffer,
 		}
 		wp = (wp + frame_count) % PA_BUFF_SIZE;
 	}
-	pthread_mutex_lock(&audio_mutex);
+
 	write_pointer = wp;
 	timestamp += frame_count;
-	pthread_mutex_unlock(&audio_mutex);
-	return 0;
+	if(have_lock)
+		pthread_mutex_unlock(&audio_mutex);
+	return paContinue;
 }
 
 int start_portaudio(int *nominal_sample_rate, double *real_sample_rate)
 {
-	PaStream *stream;
+	int pa_initialized = 0;
 
 	if(pthread_mutex_init(&audio_mutex,NULL)) {
 		error("Failed to setup audio mutex");
 		return 1;
 	}
+	audio_mutex_ready = 1;
 
 	PaError err = Pa_Initialize();
 	if(err!=paNoError)
 		goto error;
+	pa_initialized = 1;
 
 #ifdef DEBUG
 	if(testing) {
@@ -112,27 +127,33 @@ int start_portaudio(int *nominal_sample_rate, double *real_sample_rate)
 	PaDeviceIndex default_input = Pa_GetDefaultInputDevice();
 	if(default_input == paNoDevice) {
 		error("No default audio input device found");
-		return 1;
+		goto error;
 	}
 	long channels = Pa_GetDeviceInfo(default_input)->maxInputChannels;
 	if(channels == 0) {
 		error("Default audio device has no input channels");
-		return 1;
+		goto error;
 	}
 	if(channels > 2) channels = 2;
 	info.channels = channels;
 	info.light = false;
-	err = Pa_OpenDefaultStream(&stream,channels,0,paFloat32,PA_SAMPLE_RATE,paFramesPerBufferUnspecified,paudio_callback,&info);
+	pa_stream = NULL;
+	err = Pa_OpenDefaultStream(&pa_stream,channels,0,paFloat32,PA_SAMPLE_RATE,paFramesPerBufferUnspecified,paudio_callback,&info);
 	if(err!=paNoError)
 		goto error;
 
-	err = Pa_StartStream(stream);
+	err = Pa_StartStream(pa_stream);
 	if(err!=paNoError)
 		goto error;
 
-	const PaStreamInfo *info = Pa_GetStreamInfo(stream);
+	const PaStreamInfo *stream_info = Pa_GetStreamInfo(pa_stream);
+	if(!stream_info) {
+		err = paInternalError;
+		error("Unable to get PortAudio stream info");
+		goto error;
+	}
 	*nominal_sample_rate = PA_SAMPLE_RATE;
-	*real_sample_rate = info->sampleRate;
+	*real_sample_rate = stream_info->sampleRate;
 #ifdef DEBUG
 end:
 #endif
@@ -141,6 +162,17 @@ end:
 	return 0;
 
 error:
+	if(pa_stream) {
+		Pa_AbortStream(pa_stream);
+		Pa_CloseStream(pa_stream);
+		pa_stream = NULL;
+	}
+	if(pa_initialized)
+		Pa_Terminate();
+	if(audio_mutex_ready) {
+		pthread_mutex_destroy(&audio_mutex);
+		audio_mutex_ready = 0;
+	}
 	error("Error opening audio input: %s", Pa_GetErrorText(err));
 	return 1;
 }
@@ -148,8 +180,25 @@ error:
 int terminate_portaudio()
 {
 	debug("Closing portaudio\n");
+
+	if(pa_stream) {
+		PaError stop_err = Pa_StopStream(pa_stream);
+		if(stop_err != paNoError && stop_err != paStreamIsStopped) {
+			error("Error stopping audio stream: %s", Pa_GetErrorText(stop_err));
+		}
+		PaError close_err = Pa_CloseStream(pa_stream);
+		if(close_err != paNoError) {
+			error("Error closing audio stream: %s", Pa_GetErrorText(close_err));
+		}
+		pa_stream = NULL;
+	}
+
 	PaError err = Pa_Terminate();
-	if(err != paNoError) {
+	if(audio_mutex_ready) {
+		pthread_mutex_destroy(&audio_mutex);
+		audio_mutex_ready = 0;
+	}
+	if(err != paNoError && err != paNotInitialized) {
 		error("Error closing audio: %s", Pa_GetErrorText(err));
 		return 1;
 	}
@@ -158,18 +207,21 @@ int terminate_portaudio()
 
 uint64_t get_timestamp(int light)
 {
-	pthread_mutex_lock(&audio_mutex);
+	if(audio_mutex_ready)
+		pthread_mutex_lock(&audio_mutex);
 	uint64_t ts = light ? timestamp / 2 : timestamp;
-	pthread_mutex_unlock(&audio_mutex);
+	if(audio_mutex_ready)
+		pthread_mutex_unlock(&audio_mutex);
 	return ts;
 }
 
 static void fill_buffers(struct processing_buffers *ps, int light)
 {
-	pthread_mutex_lock(&audio_mutex);
+	if(audio_mutex_ready)
+		pthread_mutex_lock(&audio_mutex);
+
 	uint64_t ts = timestamp;
 	int wp = write_pointer;
-	pthread_mutex_unlock(&audio_mutex);
 
 	if(light)
 		ts /= 2;
@@ -185,6 +237,9 @@ static void fill_buffers(struct processing_buffers *ps, int light)
 		if (len < ps[i].sample_count)
 			memcpy(ps[i].samples + len, pa_buffers, (ps[i].sample_count - len) * sizeof(*pa_buffers));
 	}
+
+	if(audio_mutex_ready)
+		pthread_mutex_unlock(&audio_mutex);
 }
 
 int analyze_pa_data(struct processing_data *pd, int bph, double la, uint64_t events_from)
@@ -235,11 +290,13 @@ int analyze_pa_data_cal(struct processing_data *pd, struct calibration_data *cd)
 void set_audio_light(bool light)
 {
 	if(info.light != light) {
-		pthread_mutex_lock(&audio_mutex);
+		if(audio_mutex_ready)
+			pthread_mutex_lock(&audio_mutex);
 		info.light = light;
 		memset(pa_buffers, 0, sizeof(pa_buffers));
 		write_pointer = 0;
 		timestamp = 0;
-		pthread_mutex_unlock(&audio_mutex);
+		if(audio_mutex_ready)
+			pthread_mutex_unlock(&audio_mutex);
 	}
 }

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Beatscope
+GenericName=Mechanical Watch Timegrapher
+Comment=Analyze mechanical watch rate, beat error, and amplitude from audio input
+Exec=beatscope %F
+Icon=beatscope
+Terminal=false
+Categories=Utility;AudioVideo;
+MimeType=application/x-beatscope-data;
+StartupNotify=true

@@ -32,7 +32,7 @@
 #define _WIN32
 #endif
 
-#define CONFIG_FILE_NAME "tg-timer.ini"
+#define CONFIG_FILE_NAME "beatscope.ini"
 
 #define FILTER_CUTOFF 3000
 
@@ -225,13 +225,28 @@ struct main_window {
 
 	GtkWidget *window;
 	GtkWidget *bph_combo_box;
+	GtkWidget *preset_combo_box;
 	GtkWidget *la_spin_button;
 	GtkWidget *cal_spin_button;
+	GtkWidget *position_combo_box;
 	GtkWidget *snapshot_button;
 	GtkWidget *snapshot_name;
 	GtkWidget *snapshot_name_entry;
+	GtkWidget *status_label;
+	GtkWidget *signal_quality_label;
+	GtkWidget *signal_quality_icon;
+	GtkWidget *light_button;
 	GtkWidget *cal_button;
+	GtkWidget *guided_mode_button;
+	GtkWidget *focus_mode_button;
 	GtkWidget *notebook;
+	GtkWidget *position_summary_panel;
+	GtkWidget *position_summary_grid;
+	GtkWidget *position_summary_label;
+	GtkWidget *header_open_button;
+	GtkWidget *header_save_button;
+	GtkWidget *header_snapshot_button;
+	GtkWidget *header_preferences_button;
 	GtkWidget *save_item;
 	GtkWidget *save_all_item;
 	GtkWidget *close_all_item;
@@ -245,6 +260,11 @@ struct main_window {
 	int zombie;
 	int controls_active;
 	int calibrate;
+	int guided_mode;
+	int focus_mode;
+	int show_tooltips;
+	int confirm_on_save;
+	int theme_mode;
 	int bph;
 	double la; // deg
 	int cal; // 0.1 s/d
@@ -256,6 +276,8 @@ struct main_window {
 
 	guint kick_timeout;
 	guint save_timeout;
+	guint theme_sync_timeout;
+	int last_system_dark_mode;
 };
 
 extern int preset_bph[];
@@ -272,7 +294,8 @@ void error(char *format,...);
 	OP(bph, bph, int) \
 	OP(lift_angle, la, double) \
 	OP(calibration, cal, int) \
-	OP(light_algorithm, is_light, int)
+	OP(light_algorithm, is_light, int) \
+	OP(theme_mode, theme_mode, int)
 
 struct conf_data {
 #define DEF(NAME,PLACE,TYPE) TYPE PLACE;

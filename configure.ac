@@ -1,7 +1,13 @@
-define([tg_version], m4_normalize(m4_include([version])))
+define([beatscope_version], m4_normalize(m4_include([version])))
 AC_CONFIG_MACRO_DIRS([m4])
 
-AC_INIT([Tg], [tg_version], [vacaboja@gmail.com], [tg-timer], [https://github.com/vacaboja/tg])
+AC_INIT(
+  [Beatscope],
+  [beatscope_version],
+  [https://github.com/Harsh223/tg/issues],
+  [beatscope],
+  [https://github.com/Harsh223/tg]
+)
 AM_INIT_AUTOMAKE([-Wall foreign subdir-objects])
 
 AC_PROG_CC
@@ -15,7 +21,7 @@ AC_CHECK_TOOL([WINDRES], [windres])
 AM_CONDITIONAL([HAVE_WINDRES], [test x$WINDRES != x])
 
 AM_CONDITIONAL([BE_WINDOWS], [test x$OS = xWindows_NT])
-AM_COND_IF([BE_WINDOWS], [AC_CONFIG_LINKS([icons/tg-timer.ico:icons/tg-timer.ico])])
+AM_COND_IF([BE_WINDOWS], [AC_CONFIG_LINKS([icons/beatscope.ico:icons/beatscope.ico])])
 
 CC_CHECK_LDFLAGS([-Wl,--as-needed], [AC_SUBST([AM_LDFLAGS], [-Wl,--as-needed])], [])
 CC_CHECK_CFLAGS_APPEND([-Wall -Wextra], [], [])

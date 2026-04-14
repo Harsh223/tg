@@ -36,6 +36,101 @@ void initialize_palette()
 	define_color(&yellow,1,1,0);
 }
 
+static int panel_prefers_dark_mode(void)
+{
+	GtkSettings *settings = gtk_settings_get_default();
+	gboolean prefer_dark = FALSE;
+	gchar *theme_name = NULL;
+
+	if(settings)
+		g_object_get(settings,
+			"gtk-application-prefer-dark-theme", &prefer_dark,
+			"gtk-theme-name", &theme_name,
+			NULL);
+
+	if(theme_name) {
+		gchar *lower = g_ascii_strdown(theme_name, -1);
+		if(lower && strstr(lower, "dark"))
+			prefer_dark = TRUE;
+		g_free(lower);
+		g_free(theme_name);
+	}
+
+	return prefer_dark ? 1 : 0;
+}
+
+static void set_canvas_bg(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source_rgb(c, 0.0, 0.0, 0.0);
+	else
+		cairo_set_source_rgb(c, 0.965, 0.972, 0.985);
+}
+
+static void set_primary_fg(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source_rgb(c, 1.0, 1.0, 1.0);
+	else
+		cairo_set_source_rgb(c, 0.07, 0.10, 0.16);
+}
+
+static void set_trace_fg(cairo_t *c, int old)
+{
+	if(old) {
+		if(panel_prefers_dark_mode())
+			cairo_set_source(c, yellow);
+		else
+			cairo_set_source_rgb(c, 0.58, 0.46, 0.18);
+		return;
+	}
+
+	if(panel_prefers_dark_mode())
+		cairo_set_source_rgb(c, 1.0, 1.0, 1.0);
+	else
+		cairo_set_source_rgb(c, 0.08, 0.11, 0.17);
+}
+
+static void set_warning_fg(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source(c, yellow);
+	else
+		cairo_set_source_rgb(c, 0.56, 0.41, 0.07);
+}
+
+static void set_grid_minor(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source(c, green);
+	else
+		cairo_set_source_rgba(c, 0.22, 0.62, 0.26, 0.72);
+}
+
+static void set_grid_major(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source(c, red);
+	else
+		cairo_set_source_rgba(c, 0.76, 0.35, 0.35, 0.72);
+}
+
+static void set_guide_line(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source(c, blue);
+	else
+		cairo_set_source_rgba(c, 0.25, 0.40, 0.72, 0.68);
+}
+
+static void set_window_fill(cairo_t *c)
+{
+	if(panel_prefers_dark_mode())
+		cairo_set_source(c, blueish);
+	else
+		cairo_set_source_rgba(c, 0.72, 0.82, 0.96, 0.38);
+}
+
 static void draw_graph(double a, double b, cairo_t *c, struct processing_buffers *p, GtkWidget *da)
 {
 	GtkAllocation temp;
@@ -155,7 +250,7 @@ static void cairo_init(cairo_t *c)
 {
 	cairo_set_line_width(c,1);
 
-	cairo_set_source(c,black);
+	set_canvas_bg(c);
 	cairo_paint(c);
 }
 
@@ -203,7 +298,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 	double y = (double)OUTPUT_WINDOW_HEIGHT/2 - extents.y_bearing - extents.height/2;
 
 	if(snst->calibrate) {
-		cairo_set_source(c, white);
+		set_primary_fg(c);
 		x = print_s(c,x,y,"cal");
 		cairo_set_font_size(c, OUTPUT_FONT*2/3);
 		x = print_s(c,x,y," (");
@@ -223,7 +318,10 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 				cairo_show_text(c,"done");
 				break;
 			case 0:
-				cairo_set_source(c, snst->signal == NSTEPS ? white : yellow);
+				if(snst->signal == NSTEPS)
+					set_primary_fg(c);
+				else
+					set_warning_fg(c);
 				cairo_show_text(c, snst->signal == NSTEPS ? "acq." : "wait");
 				break;
 			case -1:
@@ -231,7 +329,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 				cairo_show_text(c,"fail");
 				break;
 		}
-		cairo_set_source(c, white);
+		set_primary_fg(c);
 		x = print_s(c,x,y,")");
 		cairo_set_font_size(c, OUTPUT_FONT);
 		char s[20];
@@ -279,11 +377,14 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 		int i;
 		for(i=0; i<8; i++) {
 			if(i%2) {
-				cairo_set_source(c, white);
+				set_primary_fg(c);
 				cairo_set_font_size(c, OUTPUT_FONT*2/3);
 				x = print_s(c,x,y,outputs[i]);
 			} else {
-				cairo_set_source(c, i > 4 || !p || !old ? white : yellow);
+				if(i > 4 || !p || !old)
+					set_primary_fg(c);
+				else
+					set_warning_fg(c);
 				cairo_set_font_size(c, OUTPUT_FONT);
 				x = print_number(c,x,y,outputs[i]);
 			}
@@ -296,7 +397,7 @@ static gboolean output_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 		else {
 			char s[100];
 			sprintf(s,"  %.2f fps",1./g_timer_elapsed(timer, NULL));
-			cairo_set_source(c, white);
+			set_primary_fg(c);
 			cairo_set_font_size(c, OUTPUT_FONT);
 			x = print_s(c,x,y,s);
 			g_timer_reset(timer);
@@ -335,12 +436,12 @@ static void expose_waveform(
 		cairo_move_to(c, x + .5, height / 2 + .5);
 		cairo_line_to(c, x + .5, height - .5);
 		if(i%5)
-			cairo_set_source(c,green);
+			set_grid_minor(c);
 		else
-			cairo_set_source(c,red);
+			set_grid_major(c);
 		cairo_stroke(c);
 	}
-	cairo_set_source(c,white);
+	set_primary_fg(c);
 	for(i = 1-NEGATIVE_SPAN; i < POSITIVE_SPAN; i++) {
 		if(!(i%5)) {
 			int x = (NEGATIVE_SPAN + i) * width / (POSITIVE_SPAN + NEGATIVE_SPAN);
@@ -366,18 +467,18 @@ static void expose_waveform(
 		if(2*i < snst->la) continue;
 		double t = period*amplitude_to_time(snst->la,i);
 		if(t > .001 * NEGATIVE_SPAN) continue;
-		int x = round(width * (NEGATIVE_SPAN - 1000*t) / (NEGATIVE_SPAN + POSITIVE_SPAN));
+		int x = round(width * (NEGATIVE_SPAN - 1000*t) / (POSITIVE_SPAN + NEGATIVE_SPAN));
 		cairo_move_to(c, x+.5, .5);
 		cairo_line_to(c, x+.5, height / 2 + .5);
 		if(i % 50)
-			cairo_set_source(c,green);
+			set_grid_minor(c);
 		else
-			cairo_set_source(c,red);
+			set_grid_major(c);
 		cairo_stroke(c);
 	}
 
 	double last_x = 0;
-	cairo_set_source(c,white);
+	set_primary_fg(c);
 	for(i = 50; i < 360; i+=50) {
 		double t = period*amplitude_to_time(snst->la,i);
 		if(t > .001 * NEGATIVE_SPAN) continue;
@@ -406,7 +507,7 @@ static void expose_waveform(
 
 		draw_graph(a,b,c,p,da);
 
-		cairo_set_source(c,old?yellow:white);
+		set_trace_fg(c, old);
 		cairo_stroke_preserve(c);
 		cairo_fill(c);
 
@@ -422,7 +523,7 @@ static void expose_waveform(
 	} else {
 		cairo_move_to(c, .5, height / 2 + .5);
 		cairo_line_to(c, width - .5, height / 2 + .5);
-		cairo_set_source(c,yellow);
+		set_warning_fg(c);
 		cairo_stroke(c);
 	}
 }
@@ -487,14 +588,14 @@ static gboolean period_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 		cairo_line_to(c, (p->tic - a - NEGATIVE_SPAN*.001*snst->sample_rate) * width/p->period, height);
 		cairo_line_to(c, (p->tic - a + POSITIVE_SPAN*.001*snst->sample_rate) * width/p->period, height);
 		cairo_line_to(c, (p->tic - a + POSITIVE_SPAN*.001*snst->sample_rate) * width/p->period, 0);
-		cairo_set_source(c,blueish);
+		set_window_fill(c);
 		cairo_fill(c);
 
 		cairo_move_to(c, (toc - a - NEGATIVE_SPAN*.001*snst->sample_rate) * width/p->period, 0);
 		cairo_line_to(c, (toc - a - NEGATIVE_SPAN*.001*snst->sample_rate) * width/p->period, height);
 		cairo_line_to(c, (toc - a + POSITIVE_SPAN*.001*snst->sample_rate) * width/p->period, height);
 		cairo_line_to(c, (toc - a + POSITIVE_SPAN*.001*snst->sample_rate) * width/p->period, 0);
-		cairo_set_source(c,blueish);
+		set_window_fill(c);
 		cairo_fill(c);
 	}
 
@@ -504,22 +605,22 @@ static gboolean period_draw_event(GtkWidget *widget, cairo_t *c, struct output_p
 		cairo_move_to(c, x+.5, .5);
 		cairo_line_to(c, x+.5, height - .5);
 		if(i % 4)
-			cairo_set_source(c,green);
+			set_grid_minor(c);
 		else
-			cairo_set_source(c,red);
+			set_grid_major(c);
 		cairo_stroke(c);
 	}
 
 	if(p) {
 		draw_graph(a,b,c,p,op->period_drawing_area);
 
-		cairo_set_source(c,old?yellow:white);
+		set_trace_fg(c, old);
 		cairo_stroke_preserve(c);
 		cairo_fill(c);
 	} else {
 		cairo_move_to(c, .5, height / 2 + .5);
 		cairo_line_to(c, width - .5, height / 2 + .5);
-		cairo_set_source(c,yellow);
+		set_warning_fg(c);
 		cairo_stroke(c);
 	}
 
@@ -588,7 +689,7 @@ static gboolean paperstrip_draw_event(GtkWidget *widget, cairo_t *c, struct outp
 				}
 			}
 		}
-		cairo_set_source(c, blue);
+		set_guide_line(c);
 		cairo_stroke(c);
 	}
 
@@ -616,7 +717,10 @@ static gboolean paperstrip_draw_event(GtkWidget *widget, cairo_t *c, struct outp
 		cairo_stroke(c);
 	}
 
-	cairo_set_source(c,stopped?yellow:white);
+	if(stopped)
+		set_warning_fg(c);
+	else
+		set_primary_fg(c);
 	for(i = snst->events_wp;;) {
 		if(!snst->events_count || !snst->events[i]) break;
 		double event = now - snst->events[i] + snst->trace_centering + sweep * PAPERSTRIP_MARGIN / (2 * zoom_factor);
@@ -643,7 +747,7 @@ static gboolean paperstrip_draw_event(GtkWidget *widget, cairo_t *c, struct outp
 		if(i == snst->events_wp) break;
 	}
 
-	cairo_set_source(c,white);
+	set_primary_fg(c);
 	cairo_set_line_width(c,2);
 	cairo_move_to(c, left_margin + 3, height - 20.5);
 	cairo_line_to(c, right_margin - 3, height - 20.5);
@@ -698,7 +802,7 @@ static gboolean debug_draw_event(GtkWidget *widget, cairo_t *c, struct output_pa
 
 		draw_debug_graph(a,b,c,p,op->debug_drawing_area);
 
-		cairo_set_source(c,snst->is_old?yellow:white);
+		set_trace_fg(c, snst->is_old);
 		cairo_stroke(c);
 	}
 

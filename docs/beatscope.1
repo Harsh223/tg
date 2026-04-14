@@ -1,0 +1,57 @@
+.TH BEATSCOPE 1
+.SH NAME
+beatscope \- software timegrapher for mechanical watches
+.SH SYNOPSIS
+.B beatscope
+.RI [ FILE ...]
+.SH DESCRIPTION
+Beatscope is a desktop application for evaluating the performance of
+mechanical watch movements from an audio signal (microphone or contact pickup).
+It provides real-time measurements including rate, beat error, amplitude,
+and paperstrip-style traces.
+
+The application also supports snapshot capture and session persistence for
+later comparison, including position-tagged measurements.
+
+Beatscope is a maintained standalone continuation based on the original
+open-source
+.B tg
+project by Marcello Mamino and contributors. This fork keeps compatibility
+with existing workflows while adding active maintenance and UX improvements.
+.SH FEATURES
+.IP \(bu 2
+Real-time watch timing analysis
+.IP \(bu 2
+Beat rate (BPH) presets and manual tuning
+.IP \(bu 2
+Lift-angle and calibration controls
+.IP \(bu 2
+Snapshot capture, save, and reload
+.IP \(bu 2
+Position tagging (DU/DD/CU/CD/CL/CR) and position summary metrics
+.SH FILES
+.TP
+.I ~/.config/beatscope.ini
+User configuration file location used by the current build.
+.TP
+.I *.tgj
+Snapshot/session data files.
+.SH EXIT STATUS
+.B beatscope
+returns 0 on successful execution, and a non-zero value on startup or runtime
+errors.
+.SH COPYRIGHT
+Beatscope and tg are distributed under the GNU GPL version 2.
+See the
+.I LICENSE
+file in the source tree for full terms.
+.SH AUTHOR
+Original tg project by Marcello Mamino and contributors.
+.br
+Beatscope maintained in the Harsh223 fork:
+.br
+https://github.com/Harsh223/tg
+.SH SEE ALSO
+.BR gtk (3),
+.BR portaudio (7),
+.BR fftw (3)

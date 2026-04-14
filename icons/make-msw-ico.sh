@@ -1,11 +1,10 @@
 #!/bin/bash
+set -euo pipefail
 
-SIZES=`cat sizes`
+SIZES="$(cat sizes)"
 
-PNGS=`for A in $SIZES; do echo ${A}x${A}/apps/tg-timer.png; done`
+APP_PNGS="$(for A in $SIZES; do echo "${A}x${A}/apps/beatscope.png"; done)"
+icotool -c -o beatscope.ico $APP_PNGS
 
-icotool -c -o tg-timer.ico $PNGS
-
-PNGS=`for A in $SIZES; do echo ${A}x${A}/mimetypes/application-x-tg-timer-data.png; done`
-
-icotool -c -o tg-document.ico $PNGS
+MIME_PNGS="$(for A in $SIZES; do echo "${A}x${A}/mimetypes/application-x-beatscope-data.png"; done)"
+icotool -c -o beatscope-document.ico $MIME_PNGS

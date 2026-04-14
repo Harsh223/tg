@@ -25,6 +25,12 @@
 #define STR(X) #X
 #define LABEL_SIZE_STR XSTR(LABEL_SIZE)
 
+#define SERIALIZED_MAX_VERSION_LEN 128
+#define SERIALIZED_MAX_NAME_LEN 256
+#define SERIALIZED_MAX_SNAPSHOTS 512
+#define SERIALIZED_MAX_WAVEFORM_SAMPLES PA_BUFF_SIZE
+#define SERIALIZED_MAX_EVENTS EVENTS_COUNT
+
 #ifdef _WIN32
 // My own implementation of %a
 // because I'm sick of bugs in __mingw_fprintf()
@@ -193,8 +199,13 @@ static int scan_string(FILE *f, char **s, uint64_t max_l, uint64_t *len)
 	int n = 0;
 	if(1 != fscanf(f, " S%"SCNu64";%n", &l, &n) || !n) return 1;
 	if(max_l && l >= max_l) return 1;
-	if(!*s) *s = malloc(l+1);
-	if(l+1 != fread(*s, 1, l+1, f)) return 1;
+
+	if(!*s) {
+		*s = malloc(l + 1);
+		if(!*s) return 1;
+	}
+
+	if(l + 1 != fread(*s, 1, l + 1, f)) return 1;
 	if((*s)[l] != ';') return 1;
 	(*s)[l] = 0;
 	if(len) *len = l;
@@ -216,7 +227,10 @@ static int scan_uint64_t_array(FILE *f, uint64_t **a, uint64_t max_l, uint64_t *
 	int n = 0;
 	if(1 != fscanf(f, " A%"SCNu64";%n", &l, &n) || !n) return 1;
 	if(max_l && l > max_l) return 1;
-	if(!*a) *a = malloc(l*sizeof(uint64_t));
+	if(!*a) {
+		*a = malloc(l * sizeof(uint64_t));
+		if(!*a) return 1;
+	}
 	for(i = 0; i < l; i++)
 		if(scan_uint64_t(f, *a+i)) return 1;
 	if(len) *len = l;
@@ -238,7 +252,10 @@ static int scan_float_array(FILE *f, float **a, uint64_t max_l, uint64_t *len)
 	int n = 0;
 	if(1 != fscanf(f, " A%"SCNu64";%n", &l, &n) || !n) return 1;
 	if(max_l && l > max_l) return 1;
-	if(!*a) *a = malloc(l*sizeof(float));
+	if(!*a) {
+		*a = malloc(l * sizeof(float));
+		if(!*a) return 1;
+	}
 	for(i = 0; i < l; i++)
 		if(scan_float(f, *a+i)) return 1;
 	if(len) *len = l;
@@ -371,9 +388,13 @@ static int scan_snapshot(FILE *f, struct snapshot **s, char **name)
 		return eat_object(f);
 
 	*s = malloc(sizeof(struct snapshot));
+	if(!*s) goto error;
 	memset(*s, 0, sizeof(struct snapshot));
+
 	(*s)->pb = malloc(sizeof(struct processing_buffers));
+	if(!(*s)->pb) goto error;
 	memset((*s)->pb, 0, sizeof(struct processing_buffers));
+
 	*name = NULL;
 
 	n = 0;
@@ -384,14 +405,14 @@ static int scan_snapshot(FILE *f, struct snapshot **s, char **name)
 
 		if(!strcmp("name", l)) {
 			debug("serializer: scanning name\n");
-			if(scan_string(f, name, 0, NULL)) goto error;
+			if(scan_string(f, name, SERIALIZED_MAX_NAME_LEN, NULL)) goto error;
 			continue;
 		}
 		if(!strcmp("pb->waveform", l)) {
 			debug("serializer: scanning pb->waveform\n");
 			uint64_t x;
 			if(	(*s)->pb->waveform ||
-				scan_float_array(f, &((*s)->pb->waveform), INT_MAX, &x)) goto error;
+				scan_float_array(f, &((*s)->pb->waveform), SERIALIZED_MAX_WAVEFORM_SAMPLES, &x)) goto error;
 			(*s)->pb->sample_count = x;
 			continue;
 		}
@@ -399,7 +420,7 @@ static int scan_snapshot(FILE *f, struct snapshot **s, char **name)
 			debug("serializer: scanning events\n");
 			uint64_t x;
 			if(	(*s)->events ||
-				scan_uint64_t_array(f, &((*s)->events), INT_MAX, &x)) goto error;
+				scan_uint64_t_array(f, &((*s)->events), SERIALIZED_MAX_EVENTS, &x)) goto error;
 			(*s)->events_count = x;
 			continue;
 		}
@@ -460,11 +481,15 @@ static int scan_snapshot(FILE *f, struct snapshot **s, char **name)
 	return 0;
 
 error:
+	if(*s) {
+		if((*s)->pb) {
+			free((*s)->pb->waveform);
+			free((*s)->pb);
+		}
+		free((*s)->events);
+		free(*s);
+	}
 	free(*name);
-	free((*s)->pb->waveform);
-	free((*s)->pb);
-	free((*s)->events);
-	free(*s);
 	*s = NULL;
 	*name = NULL;
 	return 1;
@@ -479,8 +504,10 @@ static int scan_snapshot_list(FILE *f, struct snapshot ***s, char ***names, uint
 	*names = NULL;
 	*cnt = 0;
 	if(1 != fscanf(f, " A%"SCNu64";%n", &i, &n) || !n) goto error;
+	if(i > SERIALIZED_MAX_SNAPSHOTS) goto error;
 	*s = malloc(i*sizeof(struct snapshot *));
 	*names = malloc(i*sizeof(char *));
+	if(!*s || !*names) goto error;
 	uint64_t j;
 	for(j = 0; j < i; j++) {
 		if(scan_snapshot(f, *s+*cnt, *names+*cnt)) goto error;
@@ -506,7 +533,7 @@ error:
 int write_file(FILE *f, struct snapshot **s, char **names, uint64_t cnt)
 {
 	uint64_t i;
-	if(make_label(f, "tg-timer-version")) return 1;
+	if(make_label(f, "beatscope-version")) return 1;
 	if(serialize_string(f, VERSION)) return 1;
 	if(make_label(f, "data")) return 1;
 	if(serialize_struct_begin(f)) return 1;
@@ -523,15 +550,20 @@ int read_file(FILE *f, struct snapshot ***s, char ***names, uint64_t *cnt)
 	debug("serializer: reading file\n");
 	char lbl[LABEL_SIZE+1];
 	char *l = lbl;
-	if(scan_label(f, l) || strcmp("tg-timer-version",l)) return 1;
-	if(scan_string(f, &l, LABEL_SIZE, NULL)) return 1;
-	debug("serializer: read version %s\n",l);
+	char *version = NULL;
+	if(scan_label(f, l)) return 1;
+	if(strcmp("beatscope-version", l) && strcmp("tg-timer-version", l)) return 1;
+	if(scan_string(f, &version, SERIALIZED_MAX_VERSION_LEN, NULL)) return 1;
+	debug("serializer: read version %s\n",version);
+	free(version);
+	version = NULL;
 	if(scan_label(f, l) || strcmp("data",l)) return 1;
 	debug("serializer: found data structure\n",l);
 	int n = 0;
 	if(0 != fscanf(f, " T;%n", &n) || !n) return 1;
 	*s = NULL;
 	*names = NULL;
+	*cnt = 0;
 	for(;;) {
 		if(scan_label(f,l)) goto error;
 		if(!strcmp("__end__",l)) break;

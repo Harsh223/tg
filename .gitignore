@@ -10,6 +10,7 @@
 *.elf
 build
 tg-timer.res
+beatscope.res
 
 # Executables
 *.exe
@@ -22,6 +23,10 @@ tg-timer
 tg-timer-dbg
 tg-timer-prf
 tg-timer-vlg
+beatscope
+beatscope-dbg
+beatscope-prf
+beatscope-vlg
 
 # autotools
 Makefile
